@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>AI猜拳遊戲</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest"></script>
+
+<style>
+
+*{
+    box-sizing:border-box;
+}
+
+body{
+    margin:0;
+    padding:20px;
+    font-family:Arial,sans-serif;
+    text-align:center;
+    background:linear-gradient(135deg,#2196f3,#6ec6ff);
+    color:white;
+}
+
+h1{
+    margin-top:10px;
+}
+
+#webcam-container{
+    margin-top:15px;
+}
+
+canvas{
+    border-radius:20px;
+    border:5px solid white;
+    max-width:100%;
+}
+
+button{
+    background:#ff9800;
+    border:none;
+    color:white;
+    font-size:20px;
+    padding:12px 30px;
+    border-radius:12px;
+    margin:10px;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#fb8c00;
+}
+
+.card{
+    background:white;
+    color:#333;
+    margin:15px auto;
+    max-width:500px;
+    border-radius:20px;
+    padding:15px;
+}
+
+.big{
+    font-size:36px;
+    font-weight:bold;
+}
+
+#countdown{
+    font-size:50px;
+    color:red;
+    font-weight:bold;
+}
+
+#result{
+    font-size:32px;
+    font-weight:bold;
+}
+
+.score{
+    font-size:24px;
+    margin-top:10px;
+}
+
+.footer{
+    margin-top:20px;
+    opacity:0.8;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>🤖 AI 猜拳遊戲 ✌️✊🖐️</h1>
+
+<button onclick="startGame()">
+開始遊戲
+</button>
+
+<div id="webcam-container"></div>
+
+<div id="countdown"></div>
+
+<div class="card">
+
+<h2>你的出拳</h2>
+
+<div id="playerMove" class="big">
+等待中...
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>電腦出拳</h2>
+
+<div id="computerMove" class="big">
+？
+</div>
+
+</div>
+
+<div class="card">
+
+<h2>結果</h2>
+
+<div id="result">
+準備開始
+</div>
+
+</div>
+
+<div class="card">
+
+<div class="score">
+🙋 玩家：
+<span id="playerScore">0</span>
+</div>
+
+<div class="score">
+💻 電腦：
+<span id="computerScore">0</span>
+</div>
+
+</div>
+
+<div class="footer">
+Teachable Machine AI 猜拳
+</div>
+
+<script>
+
+const URL =
+"https://teachablemachine.withgoogle.com/models/Cod9v0AXl/";
+
+let model;
+let webcam;
+
+let playerScore = 0;
+let computerScore = 0;
+
+let gameRunning = false;
+
+async function startGame(){
+
+    if(model == null){
+
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(
+            modelURL,
+            metadataURL
+        );
+
+        webcam = new tmImage.Webcam(
+            320,
+            320,
+            true
+        );
+
+        await webcam.setup();
+
+        await webcam.play();
+
+        document
+        .getElementById("webcam-container")
+        .appendChild(webcam.canvas);
+
+        window.requestAnimationFrame(loop);
+    }
+
+    if(gameRunning) return;
+
+    playRound();
+}
+
+async function loop(){
+
+    webcam.update();
+
+    window.requestAnimationFrame(loop);
+}
+
+function randomComputerMove(){
+
+    const moves = [
+        "剪刀",
+        "石頭",
+        "布"
+    ];
+
+    return moves[
+        Math.floor(Math.random()*3)
+    ];
+}
+
+function judge(player,computer){
+
+    if(player===computer)
+        return "🤝 平手";
+
+    if(
+        (player==="剪刀" && computer==="布")||
+        (player==="石頭" && computer==="剪刀")||
+        (player==="布" && computer==="石頭")
+    ){
+        playerScore++;
+
+        document.getElementById(
+            "playerScore"
+        ).innerText = playerScore;
+
+        return "🎉 你贏了";
+    }
+
+    computerScore++;
+
+    document.getElementById(
+        "computerScore"
+    ).innerText = computerScore;
+
+    return "😎 電腦贏了";
+}
+
+async function getPrediction(){
+
+    const predictions =
+        await model.predict(webcam.canvas);
+
+    let highest = predictions[0];
+
+    for(let p of predictions){
+
+        if(p.probability >
+           highest.probability){
+
+            highest = p;
+        }
+    }
+
+    return highest;
+}
+
+async function playRound(){
+
+    gameRunning = true;
+
+    const countdown =
+        document.getElementById(
+            "countdown"
+        );
+
+    countdown.innerHTML = "3";
+
+    await wait(1000);
+
+    countdown.innerHTML = "2";
+
+    await wait(1000);
+
+    countdown.innerHTML = "1";
+
+    await wait(1000);
+
+    countdown.innerHTML = "出拳！";
+
+    await wait(500);
+
+    const result =
+        await getPrediction();
+
+    let playerMove =
+        result.className;
+
+    if(result.probability < 0.85){
+
+        countdown.innerHTML = "";
+
+        document.getElementById(
+            "result"
+        ).innerHTML =
+        "⚠️ 辨識不清楚，請重新出拳";
+
+        gameRunning = false;
+
+        return;
+    }
+
+    if(
+        playerMove==="沒有" ||
+        playerMove==="Nothing"
+    ){
+        countdown.innerHTML = "";
+
+        document.getElementById(
+            "result"
+        ).innerHTML =
+        "⚠️ 沒有偵測到手勢";
+
+        gameRunning = false;
+
+        return;
+    }
+
+    const computerMove =
+        randomComputerMove();
+
+    document.getElementById(
+        "playerMove"
+    ).innerHTML = playerMove;
+
+    document.getElementById(
+        "computerMove"
+    ).innerHTML = computerMove;
+
+    const finalResult =
+        judge(
+            playerMove,
+            computerMove
+        );
+
+    document.getElementById(
+        "result"
+    ).innerHTML =
+    finalResult;
+
+    countdown.innerHTML = "";
+
+    gameRunning = false;
+}
+
+function wait(ms){
+
+    return new Promise(
+        resolve =>
+        setTimeout(resolve,ms)
+    );
+}
+
+</script>
+
+</body>
+</html>
